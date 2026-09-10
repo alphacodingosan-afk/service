@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>실시간 날씨 데스크 - WeatherCast</title>
+  <!-- Google Fonts: Inter & Noto Sans KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Leaflet Interactive Map CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans KR', 'sans-serif'],
+          },
+          colors: {
+            weather: {
+              clearStart: '#1e3a8a',
+              clearMid: '#2563eb',
+              clearEnd: '#38bdf8',
+              rainStart: '#1f2937',
+              rainMid: '#374151',
+              rainEnd: '#64748b',
+              cloudyStart: '#334155',
+              cloudyEnd: '#64748b',
+              snowStart: '#475569',
+              snowEnd: '#94a3b8'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 배경 그라디언트 부드러운 전환 효과 */
+    #background-wrapper {
+      transition: background 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* 글래스모피즘 효과 */
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    
+    .glass-input {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    /* 햇살 펄스 애니메이션 */
+    @keyframes sunGlow {
+      0%, 100% { transform: scale(1) translate(-50%, -50%); opacity: 0.65; }
+      50% { transform: scale(1.18) translate(-45%, -45%); opacity: 0.95; }
+    }
+    .sun-glow {
+      animation: sunGlow 7s ease-in-out infinite;
+    }
+
+    /* Leaflet 지도 커스텀 오버레이 및 팝업 스타일 */
+    #weather-map {
+      z-index: 1;
+    }
+    .leaflet-popup-content-wrapper {
+      background: rgba(15, 23, 42, 0.85) !important;
+      backdrop-filter: blur(12px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      color: #ffffff !important;
+      border-radius: 1rem !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+    }
+    .leaflet-popup-tip {
+      background: rgba(15, 23, 42, 0.85) !important;
+    }
+    .leaflet-container {
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body class="min-h-screen text-white font-sans overflow-x-hidden relative selection:bg-white/30 selection:text-white">
+
+  <!-- 반응형 동적 배경 컨테이너 -->
+  <div id="background-wrapper" class="fixed inset-0 pointer-events-none -z-10 bg-gradient-to-br from-blue-700 via-sky-600 to-cyan-400">
+    <!-- 맑은 날 햇살 원형 이펙트 -->
+    <div id="sun-orb" class="absolute -top-24 -right-24 w-96 h-96 sm:w-[500px] sm:h-[500px] rounded-full bg-amber-300/30 blur-3xl pointer-events-none transition-opacity duration-1000"></div>
+    <!-- 비/눈 파티클 렌더링 캔버스 -->
+    <canvas id="weather-canvas" class="absolute inset-0 w-full h-full pointer-events-none opacity-0 transition-opacity duration-700"></canvas>
+    <!-- 오버레이 엠비언트 노이즈 패턴 -->
+    <div class="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
+  </div>
+
+  <div class="relative z-10 min-h-screen flex flex-col justify-between px-4 py-6 sm:px-8 max-w-5xl mx-auto">
+    <!-- Header & Search Box -->
+    <header class="w-full space-y-4 pt-2">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2.5">
+          <i data-lucide="cloud-sun" class="w-8 h-8 text-amber-300 drop-shadow"></i>
+          <span class="text-2xl font-bold tracking-tight text-white drop-shadow-md">SkyCast</span>
+        </div>
+        <div class="text-xs sm:text-sm font-medium px-3 py-1 rounded-full glass-panel flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="current-time-display">실시간 기상 관측</span>
+        </div>
+      </div>
+
+      <!-- 검색 바 -->
+      <form id="search-form" class="relative max-w-xl mx-auto mt-6">
+        <div class="relative flex items-center">
+          <input 
+            type="text" 
+            id="city-input"
+            placeholder="도시 이름을 입력하세요 (예: 서울, Busan, Tokyo, Paris...)" 
+            class="w-full pl-12 pr-28 py-3.5 rounded-2xl glass-input text-white placeholder-white/70 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-white/60 focus:bg-white/25 transition shadow-lg"
+            autocomplete="off"
+          />
+          <i data-lucide="search" class="absolute left-4 w-5 h-5 text-white/70"></i>
+          <button 
+            type="submit" 
+            id="search-button"
+            class="absolute right-2 px-4 py-2 bg-white/30 hover:bg-white/40 active:scale-95 text-white text-xs sm:text-sm font-semibold rounded-xl transition duration-200 border border-white/30 flex items-center gap-1">
+            <span>검색</span>
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- 빠른 선택 도시 태그 -->
+        <div class="flex items-center justify-center gap-2 mt-3 flex-wrap text-xs">
+          <span class="text-white/70 font-medium">추천:</span>
+          <button type="button" class="quick-city px-2.5 py-1 rounded-lg glass-panel hover:bg-white/30 transition active:scale-95" data-city="Seoul" data-lat="37.5665" data-lon="126.9780" data-name="서울" data-country="대한민국">서울</button>
+          <button type="button" class="quick-city px-2.5 py-1 rounded-lg glass-panel hover:bg-white/30 transition active:scale-95" data-city="Busan" data-lat="35.1796" data-lon="129.0756" data-name="부산" data-country="대한민국">부산</button>
+          <button type="button" class="quick-city px-2.5 py-1 rounded-lg glass-panel hover:bg-white/30 transition active:scale-95" data-city="Jeju" data-lat="33.4996" data-lon="126.5312" data-name="제주" data-country="대한민국">제주</button>
+          <button type="button" class="quick-city px-2.5 py-1 rounded-lg glass-panel hover:bg-white/30 transition active:scale-95" data-city="Tokyo" data-lat="35.6762" data-lon="139.6503" data-name="도쿄" data-country="일본">도쿄</button>
+          <button type="button" class="quick-city px-2.5 py-1 rounded-lg glass-panel hover:bg-white/30 transition active:scale-95" data-city="London" data-lat="51.5074" data-lon="-0.1278" data-name="런던" data-country="영국">런던</button>
+          <button type="button" class="quick-city px-2.5 py-1 rounded-lg glass-panel hover:bg-white/30 transition active:scale-95" data-city="New York" data-lat="40.7128" data-lon="-74.0060" data-name="뉴욕" data-country="미국">뉴욕</button>
+        </div>
+      </form>
+    </header>
+
+    <!-- 알림 메시지 배너 -->
+    <div id="status-toast" class="hidden max-w-md mx-auto my-3 px-4 py-2.5 rounded-xl bg-rose-500/90 border border-rose-300/40 text-white text-sm flex items-center justify-between shadow-xl transition-all duration-300">
+      <div class="flex items-center space-x-2">
+        <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0"></i>
+        <span id="toast-message">도시를 찾을 수 없습니다. 다시 시도해주세요.</span>
+      </div>
+      <button id="toast-close" class="p-1 hover:bg-white/20 rounded-md">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- 로딩 인디케이터 -->
+    <div id="loading-spinner" class="hidden flex flex-col items-center justify-center my-12 space-y-3">
+      <div class="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+      <p class="text-sm font-medium text-white/80">실시간 기상 데이터를 수신하는 중...</p>
+    </div>
+
+    <!-- 메인 기상 정보 뷰 -->
+    <main id="weather-content" class="w-full my-6 space-y-6 transition-all duration-500">
+      <!-- 주요 온도 및 상태 카드 -->
+      <section class="glass-panel rounded-3xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
+        <div class="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+          <!-- 위치 및 기본 정보 -->
+          <div class="text-center md:text-left space-y-2">
+            <div class="flex items-center justify-center md:justify-start space-x-2 text-white/80 text-sm font-medium">
+              <i data-lucide="map-pin" class="w-4 h-4 text-white"></i>
+              <span id="country-text">대한민국</span>
+              <span>•</span>
+              <span id="coord-text">37.56°N, 126.97°E</span>
+            </div>
+            <h1 id="city-name" class="text-4xl sm:text-6xl font-extrabold tracking-tight drop-shadow-sm">서울</h1>
+            <p id="weather-desc" class="text-lg sm:text-2xl font-medium text-white/90">대체로 맑음</p>
+            <div class="flex items-center justify-center md:justify-start gap-4 pt-1 text-sm text-white/80">
+              <span id="temp-minmax">최저 16° / 최고 25°</span>
+              <span>•</span>
+              <span id="apparent-temp">체감 21°</span>
+            </div>
+          </div>
+
+          <!-- 대형 온도 & 날씨 아이콘 -->
+          <div class="flex flex-col items-center md:items-end">
+            <div class="relative flex items-center">
+              <div id="weather-icon-wrapper" class="w-24 h-24 sm:w-32 sm:h-32 flex items-center justify-center drop-shadow-xl">
+                <!-- 날씨 아이콘이 자바스크립트로 주입됨 -->
+                <i data-lucide="sun" class="w-20 h-20 text-amber-300"></i>
+              </div>
+              <span id="temperature-text" class="text-6xl sm:text-8xl font-bold tracking-tighter drop-shadow-lg ml-2">22°</span>
+            </div>
+            <span id="weather-theme-badge" class="mt-2 text-xs font-semibold px-3 py-1 rounded-full bg-white/20 border border-white/30 backdrop-blur-sm">
+              맑은 하늘 테마 적용 중
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 상세 기상 요소 4열 그리드 -->
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <!-- 습도 -->
+        <div class="glass-panel rounded-2xl p-4 flex flex-col items-center text-center space-y-1 hover:bg-white/20 transition">
+          <div class="p-2.5 rounded-xl bg-white/10 mb-1">
+            <i data-lucide="droplets" class="w-5 h-5 text-sky-200"></i>
+          </div>
+          <span class="text-xs text-white/70">습도</span>
+          <span id="humidity-text" class="text-xl sm:text-2xl font-bold">58%</span>
+          <span id="humidity-desc" class="text-[11px] text-white/60">쾌적한 상태</span>
+        </div>
+
+        <!-- 풍속 -->
+        <div class="glass-panel rounded-2xl p-4 flex flex-col items-center text-center space-y-1 hover:bg-white/20 transition">
+          <div class="p-2.5 rounded-xl bg-white/10 mb-1">
+            <i data-lucide="wind" class="w-5 h-5 text-teal-200"></i>
+          </div>
+          <span class="text-xs text-white/70">풍속</span>
+          <span id="wind-text" class="text-xl sm:text-2xl font-bold">3.2 m/s</span>
+          <span id="wind-desc" class="text-[11px] text-white/60">남서풍</span>
+        </div>
+
+        <!-- 강수 확률/강수량 -->
+        <div class="glass-panel rounded-2xl p-4 flex flex-col items-center text-center space-y-1 hover:bg-white/20 transition">
+          <div class="p-2.5 rounded-xl bg-white/10 mb-1">
+            <i data-lucide="cloud-rain" class="w-5 h-5 text-indigo-200"></i>
+          </div>
+          <span class="text-xs text-white/70">강수량</span>
+          <span id="precipitation-text" class="text-xl sm:text-2xl font-bold">0.0 mm</span>
+          <span id="precipitation-desc" class="text-[11px] text-white/60">비 없음</span>
+        </div>
+
+        <!-- 기압 / 자외선 지수 -->
+        <div class="glass-panel rounded-2xl p-4 flex flex-col items-center text-center space-y-1 hover:bg-white/20 transition">
+          <div class="p-2.5 rounded-xl bg-white/10 mb-1">
+            <i data-lucide="gauge" class="w-5 h-5 text-amber-200"></i>
+          </div>
+          <span class="text-xs text-white/70">기압</span>
+          <span id="pressure-text" class="text-xl sm:text-2xl font-bold">1013 hPa</span>
+          <span id="pressure-desc" class="text-[11px] text-white/60">표준 기압</span>
+        </div>
+      </section>
+
+      <!-- 24시간 시간별 기온 슬라이더 -->
+      <section class="glass-panel rounded-3xl p-5 shadow-xl">
+        <h2 class="text-sm font-semibold text-white/80 mb-3 flex items-center gap-2">
+          <i data-lucide="clock" class="w-4 h-4"></i>
+          <span>오늘의 시간별 기온 추이</span>
+        </h2>
+        <div id="hourly-forecast-container" class="flex gap-4 overflow-x-auto pb-2 pt-1 scrollbar-thin scrollbar-thumb-white/20">
+          <!-- 시간대별 슬롯 카드가 자바스크립트로 동적 생성됨 -->
+        </div>
+      </section>
+
+      <!-- 대화형 위치 및 기상 관측 지도 섹션 -->
+      <section class="glass-panel rounded-3xl p-5 sm:p-6 shadow-xl space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="flex items-center space-x-2">
+            <div class="p-2 rounded-xl bg-white/10">
+              <i data-lucide="map" class="w-5 h-5 text-amber-300"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <span>도시 위치 및 지리적 관측</span>
+                <span id="map-target-badge" class="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white/90 font-normal">서울</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 font-medium">한글 표기</span>
+              </h2>
+              <p class="text-xs text-white/70">모든 지명과 도로가 한글로 표시되며, 드래그 및 확대/축소하여 관측할 수 있습니다.</p>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            id="recenter-map-btn"
+            class="self-start sm:self-auto px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 transition text-xs font-medium flex items-center gap-1.5 border border-white/20">
+            <i data-lucide="locate-fixed" class="w-3.5 h-3.5"></i>
+            <span>위치 재정렬</span>
+          </button>
+        </div>
+
+        <!-- 지도 캔버스 컨테이너 -->
+        <div class="relative w-full h-72 sm:h-84 rounded-2xl overflow-hidden shadow-inner border border-white/20 bg-slate-900/40">
+          <div id="weather-map" class="w-full h-full"></div>
+          <!-- 지도 우상단 정보 뱃지 -->
+          <div class="absolute top-3 right-3 z-10 pointer-events-none hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl glass-panel text-xs text-white shadow-md">
+            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+            <span id="map-coord-status">위치 추적 중</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-white/60 py-4 mt-auto">
+      <p>기상 데이터 제공: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" class="underline hover:text-white transition">Open-Meteo API</a> • 실시간 지오코딩 및 예측</p>
+    </footer>
+  </div>
+
+  <script>
+    /* =========================================================================
+       Open-Meteo 기상 상태 코드(WMO Code) 매핑 정의 및 스타일 설정
+       ========================================================================= */
+    const WEATHER_MAP = {
+      // 맑음 (Clear sky)
+      0: { label: '맑음', type: 'clear', icon: 'sun', color: '#fcd34d' },
+      1: { label: '대체로 맑음', type: 'clear', icon: 'sun-medium', color: '#fde047' },
+      
+      // 구름 많음/흐림 (Clouds)
+      2: { label: '구름 조금', type: 'clear', icon: 'cloud-sun', color: '#e2e8f0' },
+      3: { label: '흐림', type: 'cloudy', icon: 'cloud', color: '#cbd5e1' },
+      45: { label: '안개', type: 'cloudy', icon: 'haze', color: '#cbd5e1' },
+      48: { label: '빙결 안개', type: 'cloudy', icon: 'cloud-fog', color: '#94a3b8' },
+
+      // 비 (Rain)
+      51: { label: '약한 이슬비', type: 'rain', icon: 'cloud-drizzle', color: '#93c5fd' },
+      53: { label: '이슬비', type: 'rain', icon: 'cloud-drizzle', color: '#60a5fa' },
+      55: { label: '짙은 이슬비', type: 'rain', icon: 'cloud-drizzle', color: '#3b82f6' },
+      61: { label: '약한 비', type: 'rain', icon: 'cloud-rain', color: '#60a5fa' },
+      63: { label: '비', type: 'rain', icon: 'cloud-rain', color: '#3b82f6' },
+      65: { label: '강한 비', type: 'rain', icon: 'cloud-rain', color: '#2563eb' },
+      80: { label: '약한 소나기', type: 'rain', icon: 'cloud-rain', color: '#60a5fa' },
+      81: { label: '소나기', type: 'rain', icon: 'cloud-rain', color: '#3b82f6' },
+      82: { label: '격렬한 소나기', type: 'rain', icon: 'cloud-lightning', color: '#1d4ed8' },
+
+      // 눈 (Snow)
+      71: { label: '약한 눈', type: 'snow', icon: 'cloud-snow', color: '#e0f2fe' },
+      73: { label: '눈', type: 'snow', icon: 'cloud-snow', color: '#e0f2fe' },
+      75: { label: '강한 눈', type: 'snow', icon: 'cloud-snow', color: '#f8fafc' },
+      77: { label: '싸락눈', type: 'snow', icon: 'cloud-snow', color: '#f8fafc' },
+      85: { label: '약한 눈보라', type: 'snow', icon: 'snowflake', color: '#bae6fd' },
+      86: { label: '강한 눈보라', type: 'snow', icon: 'snowflake', color: '#bae6fd' },
+
+      // 뇌우 (Thunderstorm)
+      95: { label: '뇌우', type: 'rain', icon: 'cloud-lightning', color: '#fbbf24' },
+      96: { label: '우박을 동반한 뇌우', type: 'rain', icon: 'cloud-hail', color: '#f59e0b' },
+      99: { label: '격렬한 우박 뇌우', type: 'rain', icon: 'cloud-lightning', color: '#ea580c' },
+    };
+
+    // 캔버스 날씨 파티클(비/눈) 애니메이션 시스템
+    const canvas = document.getElementById('weather-canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let animationId = null;
+    let currentWeatherType = 'clear';
+
+    // Leaflet 대화형 지도 인스턴스 및 상태 변수
+    let weatherMap = null;
+    let currentMarker = null;
+    let currentCityCoords = { lat: 37.5665, lon: 126.9780, name: '서울' };
+
+    function initOrUpdateMap(lat, lon, cityName, currentTemp, weatherDesc, weatherIcon) {
+      currentCityCoords = { lat, lon, name: cityName };
+      document.getElementById('map-target-badge').textContent = cityName;
+      document.getElementById('map-coord-status').textContent = `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`;
+
+      if (!weatherMap) {
+        // 지도 첫 초기화
+        weatherMap = L.map('weather-map', {
+          center: [lat, lon],
+          zoom: 10,
+          zoomControl: true,
+          attributionControl: false
+        });
+
+        // 전 세계 지명과 국가, 행정구역, 도로명이 한글(ko)로 렌더링되는 고해상도 타일 레이어 적용
+        L.tileLayer('https://{s}.google.com/vt/lyrs=m&hl=ko&gl=KR&x={x}&y={y}&z={z}', {
+          maxZoom: 20,
+          subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        }).addTo(weatherMap);
+
+        // 기본 축척 컨트롤 추가
+        L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(weatherMap);
+      } else {
+        // 부드러운 카메라 이동 효과
+        weatherMap.flyTo([lat, lon], 10, {
+          animate: true,
+          duration: 1.2
+        });
+      }
+
+      // 기존 마커 제거 후 신규 핀 생성
+      if (currentMarker) {
+        weatherMap.removeLayer(currentMarker);
+      }
+
+      // 날씨 정보가 담긴 커스텀 팝업
+      const popupHtml = `
+        <div class="p-1 text-center min-w-[120px]">
+          <div class="text-sm font-bold tracking-tight text-white mb-0.5">${cityName}</div>
+          <div class="text-2xl font-extrabold text-amber-300 my-1">${currentTemp}°</div>
+          <div class="text-xs text-slate-200 font-medium">${weatherDesc}</div>
+          <div class="text-[10px] text-slate-400 mt-1">${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E</div>
+        </div>
+      `;
+
+      currentMarker = L.marker([lat, lon])
+        .addTo(weatherMap)
+        .bindPopup(popupHtml, { closeButton: false, offset: [0, -10] })
+        .openPopup();
+
+      // 크기 렌더링 보정 (반응형 대응)
+      setTimeout(() => {
+        if (weatherMap) weatherMap.invalidateSize();
+      }, 200);
+    }
+
+    // 지도 위치 재정렬 버튼 이벤트
+    document.getElementById('recenter-map-btn').addEventListener('click', () => {
+      if (weatherMap && currentCityCoords) {
+        weatherMap.flyTo([currentCityCoords.lat, currentCityCoords.lon], 11, {
+          animate: true,
+          duration: 0.8
+        });
+        if (currentMarker) currentMarker.openPopup();
+      }
+    });
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    class Particle {
+      constructor(type) {
+        this.type = type;
+        this.reset();
+      }
+
+      reset() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * -canvas.height;
+        if (this.type === 'rain') {
+          this.length = Math.random() * 20 + 15;
+          this.speedY = Math.random() * 12 + 18;
+          this.speedX = Math.random() * 2 - 1;
+          this.opacity = Math.random() * 0.4 + 0.3;
+          this.width = Math.random() * 1.5 + 1;
+        } else if (this.type === 'snow') {
+          this.radius = Math.random() * 3 + 1.5;
+          this.speedY = Math.random() * 2 + 1;
+          this.speedX = Math.random() * 1.5 - 0.75;
+          this.opacity = Math.random() * 0.7 + 0.3;
+        }
+      }
+
+      update() {
+        this.y += this.speedY;
+        this.x += this.speedX;
+
+        if (this.y > canvas.height) {
+          this.reset();
+          this.y = 0;
+        }
+        if (this.x > canvas.width || this.x < 0) {
+          this.x = Math.random() * canvas.width;
+        }
+      }
+
+      draw() {
+        ctx.beginPath();
+        if (this.type === 'rain') {
+          ctx.strokeStyle = `rgba(200, 225, 255, ${this.opacity})`;
+          ctx.lineWidth = this.width;
+          ctx.moveTo(this.x, this.y);
+          ctx.lineTo(this.x + this.speedX * 2, this.y + this.length);
+          ctx.stroke();
+        } else if (this.type === 'snow') {
+          ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function initParticles(type, count) {
+      particles = [];
+      for (let i = 0; i < count; i++) {
+        particles.push(new Particle(type));
+      }
+    }
+
+    function renderParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].update();
+        particles[i].draw();
+      }
+      animationId = requestAnimationFrame(renderParticles);
+    }
+
+    // 날씨 상태에 따라 배경색과 분위기를 전환하는 함수
+    function applyWeatherTheme(type) {
+      currentWeatherType = type;
+      const bgWrapper = document.getElementById('background-wrapper');
+      const sunOrb = document.getElementById('sun-orb');
+      const themeBadge = document.getElementById('weather-theme-badge');
+
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+
+      if (type === 'rain') {
+        // 비 오는 날: 차분하고 세련된 다크/쿨 그레이 배경
+        bgWrapper.className = 'fixed inset-0 pointer-events-none -z-10 bg-gradient-to-br from-gray-900 via-slate-800 to-zinc-700';
+        sunOrb.style.opacity = '0';
+        canvas.style.opacity = '1';
+        themeBadge.textContent = '🌧️ 비 내림 테마 (회색빛 하늘)';
+        themeBadge.className = 'mt-2 text-xs font-semibold px-3 py-1 rounded-full bg-slate-700/50 border border-slate-500/40 backdrop-blur-sm text-slate-200';
+        initParticles('rain', 120);
+        renderParticles();
+
+      } else if (type === 'cloudy') {
+        // 흐린 날: 부드러운 슬레이트 그레이/미스트 톤
+        bgWrapper.className = 'fixed inset-0 pointer-events-none -z-10 bg-gradient-to-br from-slate-700 via-slate-600 to-gray-500';
+        sunOrb.style.opacity = '0.2';
+        canvas.style.opacity = '0';
+        themeBadge.textContent = '☁️ 흐림 테마 (차분한 그레이)';
+        themeBadge.className = 'mt-2 text-xs font-semibold px-3 py-1 rounded-full bg-slate-600/50 border border-slate-400/40 backdrop-blur-sm text-slate-200';
+
+      } else if (type === 'snow') {
+        // 눈 오는 날: 쿨 그레이와 서리빛 은색 톤
+        bgWrapper.className = 'fixed inset-0 pointer-events-none -z-10 bg-gradient-to-br from-slate-800 via-slate-700 to-sky-900';
+        sunOrb.style.opacity = '0.1';
+        canvas.style.opacity = '1';
+        themeBadge.textContent = '❄️ 눈 내림 테마 (실버 그레이)';
+        themeBadge.className = 'mt-2 text-xs font-semibold px-3 py-1 rounded-full bg-sky-900/50 border border-sky-400/40 backdrop-blur-sm text-sky-100';
+        initParticles('snow', 80);
+        renderParticles();
+
+      } else {
+        // 맑은 날 (기본): 청량하고 화사한 파란색 그라디언트
+        bgWrapper.className = 'fixed inset-0 pointer-events-none -z-10 bg-gradient-to-br from-blue-700 via-sky-600 to-cyan-400';
+        sunOrb.style.opacity = '0.7';
+        canvas.style.opacity = '0';
+        themeBadge.textContent = '☀️ 맑음 테마 (청량한 파란색 하늘)';
+        themeBadge.className = 'mt-2 text-xs font-semibold px-3 py-1 rounded-full bg-sky-400/30 border border-sky-200/40 backdrop-blur-sm text-amber-100';
+      }
+    }
+
+    // Open-Meteo Geocoding API로 위도/경도 조회 (인구수 우선 정렬 및 한국어 검색 최적화)
+    async function fetchCoordinates(cityName) {
+      const trimmed = cityName.trim();
+      if (!trimmed) throw new Error('도시 이름을 입력해주세요.');
+
+      // 지오코딩 모호성 해결용 프리셋 (에티오피아 Jeju 배제 및 주요 도시 직접 매핑)
+      const PRESETS = {
+        '제주': { name: '제주', country: '대한민국', latitude: 33.4996, longitude: 126.5312 },
+        '제주시': { name: '제주시', country: '대한민국', latitude: 33.4996, longitude: 126.5312 },
+        '제주도': { name: '제주도', country: '대한민국', latitude: 33.4996, longitude: 126.5312 },
+        'jeju': { name: '제주 (Jeju)', country: '대한민국', latitude: 33.4996, longitude: 126.5312 },
+        '뉴욕': { name: '뉴욕 (New York)', country: '미국', latitude: 40.7128, longitude: -74.0060 },
+        'new york': { name: '뉴욕 (New York)', country: '미국', latitude: 40.7128, longitude: -74.0060 },
+        'nyc': { name: '뉴욕 (New York)', country: '미국', latitude: 40.7128, longitude: -74.0060 }
+      };
+
+      const lowerKey = trimmed.toLowerCase();
+      if (PRESETS[lowerKey]) {
+        return PRESETS[lowerKey];
+      }
+
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(trimmed)}&count=10&language=ko&format=json`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('도시 검색 중 통신 오류가 발생했습니다.');
+      
+      const data = await response.json();
+      if (!data.results || data.results.length === 0) {
+        throw new Error(`'${trimmed}' 도시를 찾을 수 없습니다. 정확한 도시명을 입력해주세요.`);
+      }
+
+      // 인구수(population)가 높은 대도시 우선 정렬 & 한글 입력 시 대한민국(KR) 우선 필터
+      const isKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(trimmed);
+      const sorted = [...data.results].sort((a, b) => {
+        if (isKorean) {
+          if (a.country_code === 'KR' && b.country_code !== 'KR') return -1;
+          if (b.country_code === 'KR' && a.country_code !== 'KR') return 1;
+        }
+        return (b.population || 0) - (a.population || 0);
+      });
+
+      return sorted[0];
+    }
+
+    // Open-Meteo Forecast API로 실시간 및 시간별 기상 데이터 조회
+    async function fetchWeatherData(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('날씨 데이터를 불러오는데 실패했습니다.');
+      return await response.json();
+    }
+
+    // 기상 데이터로 UI 갱신
+    function updateWeatherUI(geo, weather) {
+      const current = weather.current;
+      const daily = weather.daily;
+      const hourly = weather.hourly;
+
+      // 도시 및 국가 정보
+      const displayName = geo.name;
+      const country = geo.country || '대한민국';
+      const latText = `${Math.abs(geo.latitude).toFixed(2)}°${geo.latitude >= 0 ? 'N' : 'S'}`;
+      const lonText = `${Math.abs(geo.longitude).toFixed(2)}°${geo.longitude >= 0 ? 'E' : 'W'}`;
+
+      document.getElementById('city-name').textContent = displayName;
+      document.getElementById('country-text').textContent = country;
+      document.getElementById('coord-text').textContent = `${latText}, ${lonText}`;
+
+      // 현재 기온
+      const currentTemp = Math.round(current.temperature_2m);
+      document.getElementById('temperature-text').textContent = `${currentTemp}°`;
+
+      // 최고/최저 및 체감
+      const maxTemp = Math.round(daily.temperature_2m_max[0]);
+      const minTemp = Math.round(daily.temperature_2m_min[0]);
+      const appTemp = Math.round(current.apparent_temperature);
+      document.getElementById('temp-minmax').textContent = `최저 ${minTemp}° / 최고 ${maxTemp}°`;
+      document.getElementById('apparent-temp').textContent = `체감 ${appTemp}°`;
+
+      // 날씨 상태 (WMO 코드)
+      const wmoCode = current.weather_code;
+      const info = WEATHER_MAP[wmoCode] || { label: '맑음', type: 'clear', icon: 'sun', color: '#fcd34d' };
+      document.getElementById('weather-desc').textContent = info.label;
+
+      // 아이콘 업데이트
+      const iconWrapper = document.getElementById('weather-icon-wrapper');
+      iconWrapper.innerHTML = `<i data-lucide="${info.icon}" class="w-20 h-20 sm:w-24 sm:h-24" style="color: ${info.color}"></i>`;
+
+      // 상세 지표
+      document.getElementById('humidity-text').textContent = `${current.relative_humidity_2m}%`;
+      document.getElementById('humidity-desc').textContent = 
+        current.relative_humidity_2m > 70 ? '습한 상태' : current.relative_humidity_2m < 35 ? '건조한 상태' : '쾌적한 습도';
+
+      document.getElementById('wind-text').textContent = `${current.wind_speed_10m.toFixed(1)} m/s`;
+      document.getElementById('wind-desc').textContent = 
+        current.wind_speed_10m < 3.3 ? '실바람' : current.wind_speed_10m < 8.0 ? '선선한 바람' : '강한 바람';
+
+      document.getElementById('precipitation-text').textContent = `${current.precipitation.toFixed(1)} mm`;
+      document.getElementById('precipitation-desc').textContent = 
+        current.precipitation > 0 ? '현재 강수 중' : '비 없음';
+
+      const pressure = Math.round(current.surface_pressure);
+      document.getElementById('pressure-text').textContent = `${pressure} hPa`;
+      document.getElementById('pressure-desc').textContent = 
+        pressure >= 1013 ? '고기압권' : '저기압권';
+
+      // 24시간 시간별 기온 슬라이더 렌더링
+      const hourlyContainer = document.getElementById('hourly-forecast-container');
+      hourlyContainer.innerHTML = '';
+      
+      const now = new Date();
+      const currentHour = now.getHours();
+
+      // 다음 12시간 표시
+      for (let i = currentHour; i < currentHour + 12 && i < hourly.time.length; i++) {
+        const timeStr = hourly.time[i].split('T')[1].substring(0, 5);
+        const temp = Math.round(hourly.temperature_2m[i]);
+        const code = hourly.weather_code[i];
+        const hInfo = WEATHER_MAP[code] || { icon: 'sun', label: '맑음' };
+
+        const card = document.createElement('div');
+        card.className = 'flex-shrink-0 flex flex-col items-center justify-between p-3 rounded-2xl glass-panel min-w-[72px] space-y-1 hover:bg-white/20 transition';
+        card.innerHTML = `
+          <span class="text-xs text-white/80">${i === currentHour ? '지금' : timeStr}</span>
+          <i data-lucide="${hInfo.icon}" class="w-6 h-6 my-1 text-white/90"></i>
+          <span class="text-sm font-semibold">${temp}°</span>
+        `;
+        hourlyContainer.appendChild(card);
+      }
+
+      // 테마 적용 (맑음 -> 파란색, 비 -> 회색 등)
+      applyWeatherTheme(info.type);
+
+      // 지도 위치 및 기상 팝업 연동 갱신
+      initOrUpdateMap(geo.latitude, geo.longitude, displayName, currentTemp, info.label, info.icon);
+
+      // 아이콘 새로고침
+      lucide.createIcons();
+    }
+
+    const toast = document.getElementById('status-toast');
+    const toastMessage = document.getElementById('toast-message');
+    const toastClose = document.getElementById('toast-close');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const weatherContent = document.getElementById('weather-content');
+
+    function showToast(msg) {
+      toastMessage.textContent = msg;
+      toast.classList.remove('hidden');
+    }
+
+    function hideToast() {
+      toast.classList.add('hidden');
+    }
+
+    toastClose.addEventListener('click', hideToast);
+
+    // 날씨 검색 메인 플로우
+    async function searchWeather(cityName, customCoords = null) {
+      hideToast();
+      loadingSpinner.classList.remove('hidden');
+      weatherContent.classList.add('opacity-40', 'pointer-events-none');
+
+      try {
+        let geo;
+        if (customCoords) {
+          geo = customCoords;
+        } else {
+          geo = await fetchCoordinates(cityName);
+        }
+        const weather = await fetchWeatherData(geo.latitude, geo.longitude);
+        updateWeatherUI(geo, weather);
+      } catch (err) {
+        showToast(err.message || '날씨 정보를 가져오는 도중 문제가 발생했습니다.');
+      } finally {
+        loadingSpinner.classList.add('hidden');
+        weatherContent.classList.remove('opacity-40', 'pointer-events-none');
+      }
+    }
+
+    // 폼 제출 이벤트 바인딩
+    const form = document.getElementById('search-form');
+    const cityInput = document.getElementById('city-input');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const query = cityInput.value.trim();
+      if (query) {
+        searchWeather(query);
+      }
+    });
+
+    // 추천 도시 칩 클릭 이벤트 (정확한 좌표를 직접 전달하여 검색 모호성 방지)
+    document.querySelectorAll('.quick-city').forEach(button => {
+      button.addEventListener('click', () => {
+        const city = button.getAttribute('data-city');
+        const lat = button.getAttribute('data-lat');
+        const lon = button.getAttribute('data-lon');
+        const name = button.getAttribute('data-name');
+        const country = button.getAttribute('data-country');
+
+        cityInput.value = name || city;
+        if (lat && lon) {
+          searchWeather(city, {
+            name: name || city,
+            country: country || '대한민국',
+            latitude: parseFloat(lat),
+            longitude: parseFloat(lon)
+          });
+        } else {
+          searchWeather(city);
+        }
+      });
+    });
+
+    // 실시간 시계 표시 업데이트
+    function updateClock() {
+      const now = new Date();
+      const options = { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' };
+      document.getElementById('current-time-display').textContent = now.toLocaleDateString('ko-KR', options);
+    }
+    updateClock();
+    setInterval(updateClock, 1000 * 60);
+
+    // 페이지 진입 시 기본 서울 날씨 로드
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      searchWeather('Seoul');
+    });
+  </script>
+</body>
+</html>
