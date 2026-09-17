@@ -48,8 +48,31 @@
     function move(n){if(!running||paused)return;player.pos.x+=n;if(collide(arena,player))player.pos.x-=n;beep(180)}
     function dropPiece(){if(!running||paused)return;player.pos.y++;if(collide(arena,player)){player.pos.y--;merge();clearLines();resetPlayer();}drop=0}
     function hardDrop(){if(!running||paused)return;let distance=0;do{player.pos.y++;distance++}while(!collide(arena,player));player.pos.y--;score+=Math.max(0,distance-1)*2;updateStats();dropPiece();beep(240)}
-    function rotate(m,reverse=false){for(let y=0;y<m.length;y++)for(let x=0;x<y;x++) [m[x][y],m[y][x]]=[m[y][x],m[x][y]];if(reverse)m.reverse();else m.forEach(r=>r.reverse())}
-    function rotatePlayer(){if(!running||paused)return;const x=player.pos.x;rotate(player.matrix);let offset=1;while(collide(arena,player)){player.pos.x+=offset;offset=-(offset+(offset>0?1:-1));if(offset>player.matrix[0].length){rotate(player.matrix,true);player.pos.x=x;return}}beep(360)}
+
+    // 직사각형 블록도 안전하게 회전하도록 새 행렬을 만들어 반환합니다.
+    // 기존 행렬을 제자리에서 transpose하면 I, J, L, T, Z 블록이 깨지는 문제가 생깁니다.
+    function rotatedMatrix(matrix){
+      const height=matrix.length;
+      const width=matrix[0].length;
+      return Array.from({length:width},(_,y)=>Array.from({length:height},(_,x)=>matrix[height-1-x][y]));
+    }
+    function rotatePlayer(){
+      if(!running||paused)return;
+      const rotated=rotatedMatrix(player.matrix);
+      const originalX=player.pos.x;
+      // 벽이나 다른 블록에 닿으면 좌우로 한 칸씩 보정합니다.
+      const kicks=[0,-1,1,-2,2];
+      for(const kick of kicks){
+        player.pos.x=originalX+kick;
+        const candidate={matrix:rotated,pos:player.pos};
+        if(!collide(arena,candidate)){
+          player.matrix=rotated;
+          beep(360);
+          return;
+        }
+      }
+      player.pos.x=originalX;
+    }
     function clearLines(){let count=0;for(let y=H-1;y>=0;y--)if(arena[y].every(Boolean)){arena.splice(y,1);arena.unshift(Array(W).fill(0));count++;y++}if(count){lines+=count;score+=[0,100,300,500,800][count]||count*250;level=1+Math.floor(lines/10);updateStats();toast.textContent=`${count}줄 삭제! ✨`;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),700);beep(600)}}
     function updateStats(){scoreEl.textContent=score;linesEl.textContent=lines;levelEl.textContent=level;const best=Math.max(high(),score);highEl.textContent=best;if(score>=best)localStorage.setItem('tetrisHighScore',score)}
     function update(time=0){const delta=time-last;last=time;if(running&&!paused){drop+=delta;if(drop>Math.max(100,800-(level-1)*65))dropPiece()}draw();raf=requestAnimationFrame(update)}
