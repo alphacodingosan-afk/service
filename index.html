@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>반짝반짝 웹 놀이터 🎈 | My Web Lab</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Gaegu (귀여운 손글씨풍) & Noto Sans KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            gaegu: ['"Gaegu"', 'cursive'],
+            sans: ['"Noto Sans KR"', 'sans-serif'],
+          },
+          colors: {
+            candy: {
+              pink: '#FF9EAA',
+              softpink: '#FFE0E5',
+              peach: '#FFB894',
+              yellow: '#FDE047',
+              lemon: '#FEF9C3',
+              mint: '#A2E8DD',
+              lightmint: '#E4F8F5',
+              sky: '#96D4F8',
+              softsky: '#E0F2FE',
+              purple: '#C4B5FD',
+              cream: '#FFFDF9',
+            }
+          },
+          animation: {
+            'float-slow': 'float 5s ease-in-out infinite',
+            'float-fast': 'float 3s ease-in-out infinite',
+            'bounce-soft': 'softBounce 2s ease-in-out infinite',
+            'wiggle': 'wiggle 1s ease-in-out infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-12px)' },
+            },
+            softBounce: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-6px)' },
+            },
+            wiggle: {
+              '0%, 100%': { transform: 'rotate(-3deg)' },
+              '50%': { transform: 'rotate(3deg)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #FFF6F7 0%, #FFFDF0 50%, #F0F9FF 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+      font-family: 'Noto Sans KR', sans-serif;
+    }
+
+    /* 포근한 그림자 효과 */
+    .bubble-shadow {
+      box-shadow: 0 10px 30px -5px rgba(255, 158, 170, 0.25), 0 4px 10px -2px rgba(150, 212, 248, 0.2);
+    }
+    
+    .card-shadow {
+      box-shadow: 0 14px 28px rgba(0, 0, 0, 0.04), 0 10px 10px rgba(0, 0, 0, 0.02);
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    
+    .card-shadow:hover {
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 0 20px 35px rgba(255, 184, 148, 0.25), 0 12px 16px rgba(150, 212, 248, 0.2);
+    }
+
+    /* 마우스 클릭 시 생기는 반짝이 효과 */
+    .sparkle {
+      position: absolute;
+      pointer-events: none;
+      font-size: 1.25rem;
+      animation: popSparkle 0.8s ease-out forwards;
+      z-index: 9999;
+    }
+
+    @keyframes popSparkle {
+      0% {
+        transform: translate(-50%, -50%) scale(0.2) rotate(0deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(calc(-50% + (var(--tx) * 1px)), calc(-50% + (var(--ty) * 1px))) scale(1.4) rotate(45deg);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body class="relative flex flex-col justify-between min-h-screen text-slate-700 selection:bg-candy-pink selection:text-white">
+
+  <div class="fixed inset-0 pointer-events-none -z-10 overflow-hidden select-none">
+    <!-- 둥실둥실 배경 버블 및 별들 -->
+    <div class="absolute top-10 left-[8%] text-3xl animate-float-slow opacity-60">☁️</div>
+    <div class="absolute top-28 right-[12%] text-2xl animate-float-fast opacity-70">✨</div>
+    <div class="absolute top-1/3 left-[4%] text-4xl animate-bounce-soft opacity-50">🌸</div>
+    <div class="absolute top-2/3 right-[6%] text-3xl animate-float-slow opacity-60">🎈</div>
+    <div class="absolute bottom-20 left-[12%] text-2xl animate-wiggle opacity-70">⭐</div>
+    <div class="absolute bottom-32 right-[18%] text-3xl animate-float-fast opacity-50">🌈</div>
+
+    <!-- 배경 파스텔 원형 블러 -->
+    <div class="absolute -top-24 -left-24 w-96 h-96 bg-candy-softpink rounded-full blur-3xl opacity-60"></div>
+    <div class="absolute top-1/2 -right-32 w-96 h-96 bg-candy-softsky rounded-full blur-3xl opacity-60"></div>
+    <div class="absolute -bottom-24 left-1/3 w-80 h-80 bg-candy-lemon rounded-full blur-3xl opacity-50"></div>
+  </div>
+
+  <header class="w-full max-w-5xl mx-auto px-6 pt-10 pb-6 text-center">
+    <!-- 상단 뱃지 -->
+    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 border border-candy-pink/30 text-rose-500 font-semibold text-sm bubble-shadow mb-4">
+      <span class="animate-spin text-base">✨</span>
+      <span>새로운 웹 프로젝트 컬렉션</span>
+      <span class="bg-candy-pink text-white text-xs px-2 py-0.5 rounded-full font-bold">2 Apps</span>
+    </div>
+
+    <!-- 메인 타이틀 & 마스코트 인터랙션 -->
+    <h1 class="text-4xl sm:text-5xl font-black tracking-tight text-slate-800 mb-3 flex items-center justify-center gap-3">
+      <span>반짝반짝 웹 놀이터</span>
+      <span id="mascot" class="inline-block cursor-pointer transition-transform hover:scale-125 active:rotate-12 select-none" title="날 클릭해봐!">
+        🐣
+      </span>
+    </h1>
+
+    <p class="text-slate-500 text-base sm:text-lg max-w-md mx-auto leading-relaxed">
+      직접 만든 웹 애플리케이션들을 모아두는 귀여운 공간이에요.<br class="hidden sm:inline"> 원하는 카드를 눌러 바로 실행해 보세요!
+    </p>
+
+    <!-- 말풍선 토스트 메시지 (마스코트 클릭 시 노출) -->
+    <div id="bubble-msg" class="hidden inline-block mt-3 px-4 py-1.5 bg-white border border-candy-yellow rounded-2xl text-xs font-bold text-amber-600 shadow-sm transition-all duration-300">
+      반가워요! 오늘도 즐거운 코딩 탐험 해요 💖
+    </div>
+  </header>
+
+  <main class="w-full max-w-5xl mx-auto px-6 py-6 flex-grow">
+    
+    <!-- 안내 및 카운터 바 -->
+    <div class="flex items-center justify-between border-b border-rose-100 pb-3 mb-8">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+        <h2 class="text-sm font-bold text-slate-600">등록된 프로젝트 바로가기</h2>
+      </div>
+      <span class="text-xs text-slate-400 font-medium">카드를 클릭하면 새 탭/페이지로 이동합니다</span>
+    </div>
+
+    <!-- 카드 목록 그리드 (추후 계속 추가 가능한 반응형 2~3열 구조) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+      <!-- 1번 카드: 마우스 연습 (mouse.html) -->
+      <a href="mouse.html" class="group relative flex flex-col justify-between bg-white rounded-3xl p-6 border-2 border-candy-softpink/60 card-shadow overflow-hidden text-left hover:border-candy-pink">
+        <!-- 배경 귀여운 그라디언트 악센트 -->
+        <div class="absolute -right-10 -bottom-10 w-36 h-36 bg-candy-softpink/40 rounded-full group-hover:scale-125 transition-transform duration-500"></div>
+
+        <div>
+          <!-- 상단 태그 & 아이콘 -->
+          <div class="flex items-center justify-between mb-4">
+            <span class="px-3 py-1 rounded-xl text-xs font-bold bg-pink-100 text-pink-600 flex items-center gap-1">
+              <i class="fa-solid fa-gamepad"></i> 미니게임
+            </span>
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-200 flex items-center justify-center text-2xl group-hover:scale-110 group-hover:rotate-6 transition-transform shadow-inner">
+              🖱️
+            </div>
+          </div>
+
+          <!-- 제목 & 설명 -->
+          <h3 class="text-2xl font-bold text-slate-800 mb-2 group-hover:text-pink-500 transition-colors flex items-center gap-2">
+            <span>마우스 연습</span>
+            <span class="text-xs px-2 py-0.5 rounded-md bg-rose-50 text-rose-500 font-bold border border-rose-200">Click!</span>
+          </h3>
+          <p class="text-slate-500 text-sm leading-relaxed mb-6">
+            클릭, 더블클릭, 드래그 앤 드롭까지! 손끝 감각을 신나게 풀어보는 재미있는 마우스 트레이닝.
+          </p>
+        </div>
+
+        <!-- 하단 액션 버튼 -->
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 group-hover:text-pink-400 transition-colors">
+            mouse.html
+          </span>
+          <span class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-candy-pink text-white font-bold text-sm shadow-md group-hover:bg-rose-500 group-hover:shadow-rose-300/50 transition-all">
+            시작하기 <i class="fa-solid fa-arrow-right text-xs group-hover:translate-x-1 transition-transform"></i>
+          </span>
+        </div>
+      </a>
+
+      <!-- 2번 카드: 날씨 알림 (weather.html) -->
+      <a href="weather.html" class="group relative flex flex-col justify-between bg-white rounded-3xl p-6 border-2 border-candy-softsky/60 card-shadow overflow-hidden text-left hover:border-candy-sky">
+        <!-- 배경 귀여운 그라디언트 악센트 -->
+        <div class="absolute -right-10 -bottom-10 w-36 h-36 bg-candy-softsky/40 rounded-full group-hover:scale-125 transition-transform duration-500"></div>
+
+        <div>
+          <!-- 상단 태그 & 아이콘 -->
+          <div class="flex items-center justify-between mb-4">
+            <span class="px-3 py-1 rounded-xl text-xs font-bold bg-sky-100 text-sky-600 flex items-center gap-1">
+              <i class="fa-solid fa-cloud-sun"></i> 날씨 정보
+            </span>
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-200 flex items-center justify-center text-2xl group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-inner">
+              🌤️
+            </div>
+          </div>
+
+          <!-- 제목 & 설명 -->
+          <h3 class="text-2xl font-bold text-slate-800 mb-2 group-hover:text-sky-500 transition-colors flex items-center gap-2">
+            <span>날씨 알림</span>
+            <span class="text-xs px-2 py-0.5 rounded-md bg-sky-50 text-sky-500 font-bold border border-sky-200">Daily</span>
+          </h3>
+          <p class="text-slate-500 text-sm leading-relaxed mb-6">
+            오늘 우리 동네 날씨와 기온은 어떨까요? 외출 팁과 기분 좋은 한 줄 조언까지 챙겨보세요!
+          </p>
+        </div>
+
+        <!-- 하단 액션 버튼 -->
+        <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 group-hover:text-sky-400 transition-colors">
+            weather.html
+          </span>
+          <span class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-candy-sky text-white font-bold text-sm shadow-md group-hover:bg-sky-500 group-hover:shadow-sky-300/50 transition-all">
+            보러가기 <i class="fa-solid fa-arrow-right text-xs group-hover:translate-x-1 transition-transform"></i>
+          </span>
+        </div>
+      </a>
+
+      <!-- 3번 카드: 새로운 프로젝트 준비 중 (Coming Soon 슬롯) -->
+      <div class="group relative flex flex-col justify-between bg-white/60 rounded-3xl p-6 border-2 border-dashed border-amber-200/80 hover:border-amber-300 hover:bg-white/80 transition-all text-left">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <span class="px-3 py-1 rounded-xl text-xs font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> 준비 중
+            </span>
+            <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-2xl group-hover:rotate-12 transition-transform">
+              🎁
+            </div>
+          </div>
+
+          <h3 class="text-2xl font-bold text-slate-700 mb-2 flex items-center gap-2">
+            다음 프로젝트
+          </h3>
+          <p class="text-slate-400 text-sm leading-relaxed mb-6">
+            새로운 캔버스 아이디어가 제작 중이에요! 카드 복사 후 파일 경로만 연결하면 바로 추가할 수 있어요.
+          </p>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100/60 flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400">coming soon...</span>
+          <button onclick="showInfoToast()" class="px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-bold transition-all">
+            추가 팁 보기 💡
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div id="guide-modal" class="fixed inset-0 bg-slate-900/30 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border-4 border-candy-yellow transform transition-all scale-95 opacity-0 duration-200" id="guide-modal-box">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🧸</span>
+          <h4 class="text-lg font-bold text-slate-800">새 페이지 추가 방법</h4>
+        </div>
+        <button onclick="closeInfoModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="text-sm text-slate-600 space-y-3 mb-6 leading-relaxed">
+        <p class="bg-amber-50 p-3 rounded-2xl text-amber-800 text-xs">
+          <strong>Tip!</strong> GitHub 레포지토리에 새 HTML 파일(예: <code>game.html</code>)을 올린 뒤 아래처럼 코드 블록만 한 개 복사해 넣으면 끝납니다.
+        </p>
+        <ol class="list-decimal list-inside space-y-1 text-xs text-slate-500">
+          <li><code>index.html</code> 파일의 카드 영역(<code>&lt;a href="..."&gt;</code>) 복사</li>
+          <li><code>href="새이름.html"</code>로 링크 교체</li>
+          <li>이모지와 제목, 설명 문구만 귀엽게 수정!</li>
+        </ol>
+      </div>
+
+      <button onclick="closeInfoModal()" class="w-full py-2.5 rounded-2xl bg-candy-yellow text-slate-800 font-bold hover:bg-amber-300 transition-colors shadow-sm">
+        확인했어요! ✨
+      </button>
+    </div>
+  </div>
+
+  <footer class="w-full max-w-5xl mx-auto px-6 py-8 text-center text-xs text-slate-400">
+    <div class="inline-flex items-center gap-3 bg-white/70 px-4 py-2 rounded-full border border-slate-200/60 shadow-sm mb-3">
+      <span>배포 준비 완료 🚀</span>
+      <span class="text-slate-300">|</span>
+      <span>GitHub Pages 전용 메인 페이지</span>
+    </div>
+    <p>© 웹 실험실 • Made with 💖 and Creativity</p>
+  </footer>
+
+  <script>
+    // 1. 마스코트(🐣) 클릭 시 귀여운 반응
+    const mascot = document.getElementById('mascot');
+    const bubbleMsg = document.getElementById('bubble-msg');
+    const cuteSounds = ['🐣 삐약!', '🎈 환영해요!', '✨ 반짝반짝!', '🍀 행운이 가득!', '💖 화이팅!'];
+
+    mascot.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const randomText = cuteSounds[Math.floor(Math.random() * cuteSounds.length)];
+      bubbleMsg.textContent = randomText;
+      bubbleMsg.classList.remove('hidden');
+
+      // 마스코트 애니메이션
+      mascot.classList.add('animate-spin');
+      setTimeout(() => mascot.classList.remove('animate-spin'), 600);
+
+      // 2초 후 자동 숨김
+      setTimeout(() => {
+        bubbleMsg.classList.add('hidden');
+      }, 2500);
+    });
+
+    // 2. 가이드 모달 제어
+    const guideModal = document.getElementById('guide-modal');
+    const guideBox = document.getElementById('guide-modal-box');
+
+    function showInfoToast() {
+      guideModal.classList.remove('hidden');
+      setTimeout(() => {
+        guideBox.classList.remove('scale-95', 'opacity-0');
+        guideBox.classList.add('scale-100', 'opacity-100');
+      }, 10);
+    }
+
+    function closeInfoModal() {
+      guideBox.classList.remove('scale-100', 'opacity-100');
+      guideBox.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        guideModal.classList.add('hidden');
+      }, 200);
+    }
+
+    // 모달 배경 클릭 시 닫기
+    guideModal.addEventListener('click', (e) => {
+      if (e.target === guideModal) closeInfoModal();
+    });
+
+    // 3. 마우스 클릭 시 귀여운 파스텔 반짝이(✨, 💖, 🌸, ⭐) 스파클 효과
+    const sparkles = ['✨', '💖', '⭐', '🌸', '🍬', '🎈'];
+    window.addEventListener('click', (e) => {
+      // 버튼 또는 링크 클릭 시에도 은은하게 퍼짐
+      for (let i = 0; i < 4; i++) {
+        const el = document.createElement('span');
+        el.className = 'sparkle';
+        el.textContent = sparkles[Math.floor(Math.random() * sparkles.length)];
+        
+        // 랜덤 비산 각도 및 거리
+        const tx = (Math.random() - 0.5) * 80;
+        const ty = (Math.random() - 0.5) * 80 - 20;
+        el.style.setProperty('--tx', tx);
+        el.style.setProperty('--ty', ty);
+        
+        el.style.left = `${e.pageX}px`;
+        el.style.top = `${e.pageY}px`;
+        
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 800);
+      }
+    });
+  </script>
+</body>
+</html>
